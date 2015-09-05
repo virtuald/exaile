@@ -34,6 +34,7 @@
           <packing>
             <property name="left_attach">0</property>
             <property name="top_attach">0</property>
+            <property name="width">2</property>
           </packing>
         </child>
         <child>
@@ -47,6 +48,21 @@
           <packing>
             <property name="left_attach">0</property>
             <property name="top_attach">1</property>
+          </packing>
+        </child>
+        <child>
+          <object class="GtkButton" id="auto_button">
+            <property name="label" translatable="yes">Auto</property>
+            <property name="can_focus">True</property>
+            <property name="receives_default">False</property>
+            <property name="no_show_all">True</property>
+            <property name="halign">center</property>
+            <property name="valign">center</property>
+            <signal name="clicked" handler="on_auto_button_clicked" swapped="no"/>
+          </object>
+          <packing>
+            <property name="left_attach">0</property>
+            <property name="top_attach">2</property>
           </packing>
         </child>
       </object>

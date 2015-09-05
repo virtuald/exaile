@@ -42,7 +42,14 @@ from xl.nls import gettext as _
 from xlgui.guiutil import idle_add, GtkTemplate
 from xlgui.accelerators import Accelerator
 from xlgui.widgets import menu, dialogs
-   
+
+import bpmdetect
+autodetect_enabled = bpmdetect.autodetect_supported()
+
+menu_providers = [
+    'track-panel-menu',
+    'playlist-context-menu',
+]
     
 class BPMCounterPlugin(object):
     """
@@ -50,12 +57,21 @@ class BPMCounterPlugin(object):
     """
     # Provider API requirement
     name = 'BPM'
+    menuitem = None
     
     def enable(self, exaile):
         pass
     
     def on_gui_loaded(self):
         providers.register('mainwindow-info-area-widget', self)
+        
+        if autodetect_enabled:
+            self.menuitem = menu.simple_menu_item('_bpm', ['enqueue'],
+                _('Autodetect BPM'), callback=self.on_auto_menuitem,
+                condition_fn=lambda n, p, c: not c['selection-empty'])
+            
+            for p in menu_providers:
+                providers.register(p, self.menuitem)
     
     def disable(self):
         """
@@ -63,12 +79,48 @@ class BPMCounterPlugin(object):
         """
         providers.unregister('mainwindow-info-area-widget', self)
         
+        if self.menuitem is not None:
+            for p in menu_providers:
+                providers.unregister(p, self.menuitem)
+        
     def create_widget(self, info_area):
         """
             mainwindow-info-area-widget provider API method
         """
-        return BPMWidget(info_area.get_player())
+        return BPMWidget(info_area.get_player(), self)
 
+    def on_auto_menuitem(self, menu, display_name, playlist_view, context):
+        tracks = context['selected-tracks']
+        if len(tracks) > 0:
+            self.autodetect_bpm(tracks[0])
+            
+    def autodetect_bpm(self, track):
+        
+        def _on_complete(bpm, err):
+            if err is not None:
+                dialogs.error(None, err)
+            else:
+                self.set_bpm(track, bpm)
+        
+        bpmdetect.detect_bpm(track.get_loc_for_io(), _on_complete)
+    
+    def set_bpm(self, track, bpm):
+        '''Make sure we don't accidentally set BPM on things'''
+        
+        if track and bpm:
+            
+            bpm = int(bpm)
+            
+            msg = Gtk.MessageDialog(None, Gtk.DialogFlags.MODAL, Gtk.MessageType.QUESTION, Gtk.ButtonsType.YES_NO, 
+                _('Set BPM of %d on %s?') % (bpm, track.get_tag_display('title')))
+            msg.set_default_response(Gtk.ResponseType.NO)
+            result = msg.run()
+            msg.destroy()
+        
+            if result == Gtk.ResponseType.YES:
+                track.set_tag_raw('bpm', bpm)
+                if not track.write_tags():
+                    dialogs.error(None, "Error writing BPM to %s" % GObject.markup_escape_text(track.get_loc_for_io()))
 
 plugin_class = BPMCounterPlugin
 
@@ -80,13 +132,15 @@ class BPMWidget(Gtk.Frame):
     
     eventbox,       \
     bpm_label,      \
-    apply_button    = GtkTemplate.Child.widgets(3)
+    auto_button,    \
+    apply_button    = GtkTemplate.Child.widgets(4)
 
-    def __init__(self, player):
+    def __init__(self, player, plugin):
         Gtk.Frame.__init__(self, label=_('BPM Counter'))
         self.init_template()
         
         self.player = player
+        self.plugin = plugin
         self.taps = []
         
         # TODO: Add preferences to adjust these settings..
@@ -96,6 +150,11 @@ class BPMWidget(Gtk.Frame):
         
         # if no tap received, then restart
         self.stale_time = settings.get_option('plugin/bpm/stale_period', 2.0)
+        
+        # Autodetect plugin
+        
+        if autodetect_enabled:
+            self.auto_button.props.visible = True
         
         # Be notified when a new track is playing
         event.add_callback(self.playback_track_start, 'playback_track_start', self.player)
@@ -135,7 +194,11 @@ class BPMWidget(Gtk.Frame):
     @GtkTemplate.Callback
     def on_apply_button_clicked(self, widget):
         self.set_bpm()
-    
+        
+    @GtkTemplate.Callback
+    def on_auto_button_clicked(self, widget):
+        self.plugin.autodetect_bpm(self.track)
+        
     @GtkTemplate.Callback
     def on_eventbox_key_press_event(self, widget, event):
         
@@ -199,19 +262,7 @@ class BPMWidget(Gtk.Frame):
         
     def set_bpm(self):
         '''Make sure we don't accidentally set BPM on things'''
-        if self.track and self.bpm:
-            
-            msg = Gtk.MessageDialog(self.get_toplevel(), Gtk.DialogFlags.MODAL, Gtk.MessageType.QUESTION, Gtk.ButtonsType.YES_NO, 
-                _('Set BPM of %d on %s?') % (int(self.bpm), self.track.get_tag_display('title')))
-            msg.set_default_response( Gtk.ResponseType.NO )
-            result = msg.run()
-            msg.destroy()
-        
-            if result == Gtk.ResponseType.YES:
-                self.track.set_tag_raw('bpm', int(self.bpm))
-                if not self.track.write_tags():
-                    dialogs.error( None, "Error writing BPM to %s" % GObject.markup_escape_text(self.track.get_loc_for_io()) )
-        
+        self.plugin.set_bpm(self.track, self.bpm)
         self.update_ui()
     
     
@@ -228,5 +279,8 @@ class BPMWidget(Gtk.Frame):
                 self.apply_button.set_sensitive(apply_enabled)
             else:
                 self.apply_button.set_sensitive(False)
+        
+        if autodetect_enabled:
+            self.auto_button.set_sensitive(self.track is not None)
     
  
