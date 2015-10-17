@@ -43,6 +43,9 @@
 #    - selected-tracks
 #       Will return all selected tracks, even if a playlist is selected
 #
+#    - selection-count
+#       Use this for conditions where you care about counts != 0
+#
 # Other context keys are available for specific panels
 #
 
@@ -55,6 +58,10 @@ from xlgui.widgets import (
 
 ### Generic track selection menus
 
+def __setup_context(context):
+    context['selected-tracks'] = lambda name, parent: parent.tree.get_selected_tracks()
+    context['selection-empty'] = lambda name, parent: parent.tree.get_selection_empty()
+    context['selection-count'] = lambda name, parent: parent.tree.get_selection().count_selected_rows()
 
 def __create_track_panel_menus():
     
@@ -88,8 +95,7 @@ class TrackPanelMenu(menu.ProviderMenu):
     
     def get_context(self):
         context = common.LazyDict(self._parent)
-        context['selected-tracks'] = lambda name, parent: parent.tree.get_selected_tracks()
-        context['selection-empty'] = lambda name, parent: parent.tree.get_selection_empty()
+        __setup_context(context)
         return context
     
 
@@ -124,8 +130,7 @@ class CollectionContextMenu(menu.MultiProviderMenu):
 
     def get_context(self):
         context = common.LazyDict(self._parent)
-        context['selected-tracks'] = lambda name, parent: parent.tree.get_selected_tracks()
-        context['selection-empty'] = lambda name, parent: parent.tree.get_selection_empty()
+        __setup_context(context)
         return context
 
 ### Files panel menu
@@ -160,9 +165,7 @@ class FilesContextMenu(menu.MultiProviderMenu):
 
     def get_context(self):
         context = common.LazyDict(self._parent)
-        context['selected-tracks'] = lambda name, parent: parent.tree.get_selected_tracks()
-        context['selection-empty'] = lambda name, parent: parent.tree.get_selection_empty()
-        
+        __setup_context(context)
         return context
 
 ### Playlist panel menus
@@ -238,8 +241,7 @@ class PlaylistsPanelPlaylistMenu(menu.MultiProviderMenu):
     def get_context(self):
         context = common.LazyDict(self._parent)
         context['selected-playlist'] = lambda name, parent: parent.tree.get_selected_page(raw=True)
-        context['selected-tracks'] = lambda name, parent: parent.tree.get_selected_tracks()
-        context['selection-empty'] = lambda name, parent: parent.tree.get_selection_empty()
+        __setup_context(context)
         return context
 
 ### Radio panel menu
@@ -266,7 +268,6 @@ class RadioPanelPlaylistMenu(menu.MultiProviderMenu):
     def get_context(self):
         context = common.LazyDict(self._parent)
         context['selected-playlist'] = lambda name, parent: parent.tree.get_selected_page(raw=True)
-        context['selected-tracks'] = lambda name, parent: parent.tree.get_selected_tracks()
-        context['selection-empty'] = lambda name, parent: parent.tree.get_selection_empty()
+        __setup_context(context)
         return context
 
