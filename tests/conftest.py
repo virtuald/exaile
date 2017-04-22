@@ -44,14 +44,14 @@ def _fname(ext):
     return ext, local_path, Gio.File.new_for_path(local_path).get_uri()
 
 _all_tracks = [
-    TrackData(*_fname('aac'),  size=3639,  writeable=True),
+    TrackData(*_fname('aac'),  size=8372,  writeable=True),
     TrackData(*_fname('aiff'), size=16472, writeable=False),
     TrackData(*_fname('au'),   size=16425, writeable=False),
-    TrackData(*_fname('flac'), size=17453, writeable=True),
-    TrackData(*_fname('mp3'),  size=4692,  writeable=True),
-    TrackData(*_fname('mp4'),  size=2968,  writeable=True),
+    TrackData(*_fname('flac'), size=29535, writeable=True),
+    TrackData(*_fname('mp3'),  size=7517,  writeable=True),
+    TrackData(*_fname('mp4'),  size=7763,  writeable=True),
     TrackData(*_fname('mpc'),  size=6650,  writeable=True),
-    TrackData(*_fname('ogg'),  size=13002, writeable=True),
+    TrackData(*_fname('ogg'),  size=24038, writeable=True),
     TrackData(*_fname('spx'),  size=1000,  writeable=True),
     TrackData(*_fname('wav'),  size=46124, writeable=False),
     TrackData(*_fname('wma'),  size=3864,  writeable=True),
