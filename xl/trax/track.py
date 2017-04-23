@@ -42,6 +42,7 @@ from xl import (
 )
 from xl.nls import gettext as _
 from xl.unicode import shave_marks
+from xl.metadata.tags import disk_tags as _disk_tags
 
 logger = logging.getLogger(__name__)
 

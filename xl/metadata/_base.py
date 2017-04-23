@@ -26,7 +26,6 @@
 
 from collections import namedtuple
 import copy
-from gi.repository import Gio
 
 INFO_TAGS = ['__bitrate', '__length']
 
@@ -56,12 +55,16 @@ class BaseFormat(object):
     tag_mapping = {}
     others = True
     writable = False
-    # TODO: can we change this to be any excessively large field? its hard
-    # to get every single cover tag name and would probably suit our needs
-    # better. perhaps any field with \n (lyrics) or >4KB (covers) would
-    # work for a condition.
-    ignore_tags = ['metadata_block_picture', 'coverart', 'cover', 'lyrics', 'Cover Art (front)']
-
+    
+    @classmethod
+    def _compute_mappings(cls):
+        # this only needs to be run once per class
+        
+        cls._reverse_mapping = {v: k for k,v in cls.tag_mapping.iteritems()}
+        
+        from .tags import disk_tags
+        cls.ignore_tags = set(disk_tags)
+        
     def __init__(self, loc):
         """
             Raises :class:`NotReadable` if the file cannot be
@@ -73,8 +76,11 @@ class BaseFormat(object):
         self.loc = loc
         self.open = False
         self.mutagen = None
-        self._reverse_mapping = dict((
-            (v,k) for k,v in self.tag_mapping.iteritems() ))
+        try:
+            self._reverse_mapping
+        except AttributeError:
+            self.__class__._compute_mappings()
+        
         self.load()
 
     def load(self):
@@ -107,14 +113,8 @@ class BaseFormat(object):
             return None
 
     def _get_keys(self):
-        keys = []
-        for k in self._get_raw().keys():
-            if k in self._reverse_mapping:
-                keys.append(self._reverse_mapping[k])
-            else:
-                keys.append(k)
-        return keys
-
+        return [self._reverse_mapping.get(k, k) for k in self._get_raw().keys()]
+        
     def read_all(self):
         """
             Reads all non-blacklisted tags from the file.

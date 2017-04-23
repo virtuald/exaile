@@ -526,6 +526,13 @@ class TestTrack(object):
     def test_list_disk_tag(self, test_tracks):
         td = test_tracks.get('.ogg')
         tr = track.Track(td.filename)
+        
+        # non-disk tags
+        assert set(tr.list_tags()) == \
+            {'__bitrate', '__length', '__modified', '__basedir', '__basename', '__loc',
+             'album', 'tracknumber', 'artist', 'title'}
+        
+        # disk tags
         assert set(tr.list_tags_disk()) == \
                         {'album', 'cover', 'tracknumber', 'artist', 'title'}
 
@@ -534,3 +541,12 @@ class TestTrack(object):
         tr = track.Track(tr_name)
         assert tr.list_tags_disk() == None
 
+    def test_write_disk_tag(self, test_tracks):
+        # when writing disk-only tags, only allow them to be retrieved via disk
+        pass
+        
+        # should be able to roundtrip it
+        
+        
+    # test_write_no_clobber
+    # .. make sure we don't kill stuff

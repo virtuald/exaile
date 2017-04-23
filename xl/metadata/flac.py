@@ -30,6 +30,7 @@ from xl.metadata._base import (
     CoverImage
 )
 from mutagen import flac
+from mutagen.flac import Picture
 
 class FlacFormat(BaseFormat):
     MutagenType = flac.FLAC
@@ -44,15 +45,28 @@ class FlacFormat(BaseFormat):
         return -1
         
     def _set_tag(self, raw, tag, value):
+        if tag == 'cover':
+            self.mutagen.clear_pictures()
+            for v in value:
+                picture = Picture()
+                picture.type = v.type
+                picture.desc = v.desc
+                picture.mime = v.mime
+                picture.data = v.data
+                self.mutagen.add_picture(picture)
+            return
+        
         # flac has text based attributes, so convert everything to unicode
-        BaseFormat._set_tag(self, raw, tag, [common.to_unicode(v) for v in value])
+        value = [common.to_unicode(v) for v in value]
+        BaseFormat._set_tag(self, raw, tag, value)
 
-    def read_tags(self, tags):
-        td = super(FlacFormat, self).read_tags(tags)
-        if 'cover' in tags:
-            td['cover'] = [CoverImage(type=p.type, desc=p.desc, mime=p.mime, data=p.data) \
+    def _get_tag(self, raw, tag):
+        if tag == 'cover':
+            return [CoverImage(type=p.type, desc=p.desc, mime=p.mime, data=p.data) \
                 for p in self.mutagen.pictures]
-        return td
+            
+        return BaseFormat._get_tag(self, raw, tag)
+
 
 # vim: et sts=4 sw=4
 
