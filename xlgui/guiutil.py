@@ -695,4 +695,37 @@ def css_from_pango_font_description(pango_font_str):
     )
     return font_css_str
 
+def _popup_menu_button_press(widget, event):
+    if event.triggers_context_menu():
+        widget.emit('popup-menu')
+        return True
+
+def setup_popup_menu(widget, handler=None, menu=None):
+    '''
+        Reliably configures a widget so that the popup-menu signal will be
+        triggered when a right click or context menu action is triggered
+        
+        If the handler argument is specified, that handler will be attached
+        to the popup-menu signal of the widget and the handler_id will be
+        returned from this function
+        
+        If the menu argument is specified, the menu will be popped up
+    '''
+    if menu is not None and handler is not None:
+        raise ValueError("Internal error: specify either menu or handler, not both")
+    
+    if menu is not None:
+        def _handler():
+            pass
+        handler = _handler
+    
+    if handler is not None:
+        widget.connect('popup-menu', handler)
+    
+    # enable BUTTON_PRESS_MASK
+    widget.add_events(Gdk.EventMask.BUTTON_PRESS_MASK)
+    widget.connect('button-press-event', _popup_menu_button_press)
+    
+    # if hasattr popup_at_widget
+
 # vim: et sts=4 sw=4
