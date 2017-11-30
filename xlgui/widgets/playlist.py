@@ -896,6 +896,11 @@ class PlaylistView(AutoScrollTreeView, providers.ProviderHandler):
         font = settings.get_option('gui/playlist_font', None)
         if font is not None:
             font = Pango.FontDescription(font)
+            
+        # create a fixed column for the playlist icon
+        
+        
+        
 
         for position, column in enumerate(columns):
             position += 2  # offset for pixbuf column
@@ -910,6 +915,73 @@ class PlaylistView(AutoScrollTreeView, providers.ProviderHandler):
 
             header.get_ancestor(Gtk.Button).connect('key-press-event',
                                                     self.on_header_key_press_event)
+            
+            playlist_column.set_attributes(playlist_column.cellrenderer,
+                                           sensitive=PlaylistModel.COL_SENSITIVE,
+                                           weight=PlaylistModel.COL_WEIGHT)
+    
+    def _compute_font(self, font):
+        default_font = Gtk.Widget.get_default_style().font_desc
+        if font is None:
+            font = default_font
+
+        def_font_sz = float(default_font.get_size())
+
+        try:
+            self.cellrenderer.set_property('font-desc', font)
+        except TypeError:
+            pass
+
+        # how much has the font deviated from normal?
+        self._font_ratio = font.get_size() / def_font_sz
+
+        try:
+            # adjust the display size of the column
+            ratio = self._font_ratio
+
+            # small fonts can be problematic..
+            # -> TODO: perhaps default widths could be specified
+            #          in character widths instead? then we could
+            #          calculate it instead of using arbitrary widths
+            if ratio < 1:
+                ratio = ratio * 1.25
+
+            self.size = max(int(self.size * ratio), 1)
+        except AttributeError:
+            pass
+    
+    def _compute_icon_size(self):
+        '''Returns a default icon height based on the font size'''
+        sz = Gtk.icon_size_lookup(Gtk.IconSize.BUTTON)[1]
+        return max(int(sz * self._font_ratio), 1)
+    
+    def get_icon_size_ratio(self):
+        '''Returns how much bigger or smaller an icon should be'''
+        return self._font_ratio
+
+    def _setup_fixed_column(self):
+        col = Gtk.TreeViewColumn('')
+        cell = Gtk.CellRendererPixbuf()
+        playlist_columns.Column
+        cell.set_fixed_size(TODO)
+        cell.set_property('xalign', 0.0)
+        col.pack_start(cell, False)
+        col.set_attributes(cell, pixbuf=PlaylistModel.COL_PIXBUF)
+        col.set_resizable(False)
+        col.set_reorderable(False)
+        col.set_clickable(False)
+        col.set_sizing(Gtk.TreeViewColumnSizing.FIXED)
+    
+    def _configure_column(self):
+        pass
+    
+    def _on_reconfigure_fonts(self):
+        pass
+    
+    def _on_resize_columns(self):
+        for col in self.cols:
+            col._setup_sizing()
+        pass
 
     def _refresh_columns(self):
         selection = self.get_selection()
@@ -1332,6 +1404,24 @@ class PlaylistView(AutoScrollTreeView, providers.ProviderHandler):
 
 
 class PlaylistModel(Gtk.ListStore):
+    '''
+        This ListStore contains all the information needed to render a playlist
+        via a PlaylistView. There are five columns:
+        
+        * xl.trax.Track
+        * dictionary (tag cache)
+        * Gdk.Pixbuf (indicates whether track is playing or not)
+        * boolean (indicates whether row is sensitive)
+        * Pango.Weight (indicates if row is the playing track or not)
+        
+        The cache keys correspond to the tags rendered by each column. When a
+        track changes, the row's corresponding cache is cleared and the row
+        change event is fired.
+        
+        The cache keys are populated by the playlist columns. This arrangement
+        ensures that we don't have to recreate the playlist model each time the
+        columns are changed.
+    '''
 
     __gsignals__ = {
         # Called with true indicates starting operation, False ends op
@@ -1341,10 +1431,16 @@ class PlaylistModel(Gtk.ListStore):
             (GObject.TYPE_BOOLEAN,)
         )
     }
-
+    
+    COL_TRACK = 0
+    COL_CACHE = 1
+    COL_PIXBUF = 2
+    COL_SENSITIVE = 3
+    COL_WEIGHT = 4
+    
     def __init__(self, playlist, column_names, player, parent):
-        # columns: Track, Pixbuf
-        Gtk.ListStore.__init__(self, object, GdkPixbuf.Pixbuf)
+        # columns: Track, Pixbuf, dict (cache)
+        Gtk.ListStore.__init__(self, object, object, GdkPixbuf.Pixbuf, bool, Pango.Weight)
         self.playlist = playlist
         self.player = player
         
@@ -1439,7 +1535,39 @@ class PlaylistModel(Gtk.ListStore):
         if data == "gui/playlist_font":
             self._refresh_icons()
 
-    def icon_for_row(self, row):
+    def _compute_row_params(self, rowidx):
+        '''
+            :returns: pixbuf, sensitive, weight
+        '''
+        
+        # things to compute:
+        # - is this the current track
+        # - does this fall in a spat boundary
+        
+        weight = Pango.Weight.NORMAL
+        sensitive = True
+        
+        playlist = self.playlist
+        if playlist is not self.player.queue.current_playlist:
+        
+        playlist = self.container.playlist
+        if playlist is not self.player.queue.current_playlist:
+            cell.props.weight = Pango.Weight.NORMAL
+            cell.props.sensitive = True
+        else:
+            if track == self.player.current and \
+               path[0] == playlist.get_current_position():
+                cell.props.weight = Pango.Weight.HEAVY
+            else:
+                cell.props.weight = Pango.Weight.NORMAL
+            
+            if -1 < playlist.spat_position < path[0] and \
+                    playlist.shuffle_mode == 'disabled':
+                cell.props.sensitive = False
+            else:
+                cell.props.sensitive = Tru
+        
+        
         # TODO: we really need some sort of global way to say "is this playlist/pos the current one?
         if self.playlist.current_position == row and \
                 self.playlist[row] == self.player.current and \
@@ -1456,7 +1584,7 @@ class PlaylistModel(Gtk.ListStore):
                     return self.pause_stop_pixbuf
                 else:
                     return self.pause_pixbuf
-        if self.playlist.spat_position == row:
+        elif self.playlist.spat_position == row:
             return self.stop_pixbuf
         return self.clear_pixbuf
 
@@ -1464,6 +1592,9 @@ class PlaylistModel(Gtk.ListStore):
         iter = self.iter_nth_child(None, position)
         if iter is not None:
             self.set(iter, 1, self.icon_for_row(position).pixbuf)
+            
+    def _update_row(self, it):
+        self.set(it, 1, self.icon_for_row(position).pixbuf)
 
     ### Event callbacks to keep the model in sync with the playlist ###
 
@@ -1483,6 +1614,13 @@ class PlaylistModel(Gtk.ListStore):
 
     def on_spat_position_changed(self, event_type, playlist, positions):
         spat_position = min(positions)
+        
+        # iter
+        it = self.iter_nth_child(None, spat_position)
+        while it:
+            self._update_row(it)
+            it = self.iter_next(it)
+        
         for position in xrange(spat_position, len(self)):
             self.update_icon(position)
 
@@ -1510,6 +1648,7 @@ class PlaylistModel(Gtk.ListStore):
 
         for row in self:
             if row[0] in redraw_queue:
+                row[self.COL_CACHE].clear()
                 self.row_changed(row.path, row.iter)
             
     #
@@ -1548,8 +1687,10 @@ class PlaylistModel(Gtk.ListStore):
         GLib.idle_add(self._load_data_done, render_data)
 
     def _load_data_fn(self, tracks):
+        indices = (0, 1, 2, 3, 4)
         return [
-            (position, (0, 1), (track, self.icon_for_row(position).pixbuf)) \
+            (position, indices,
+             (track, {}, self.icon_for_row(position).pixbuf, {}, False, Pango.Weight.NORMAL)) \
             for position, track in tracks
         ]
 

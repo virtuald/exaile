@@ -62,19 +62,17 @@ class Column(Gtk.TreeViewColumn):
     dataproperty = 'text'
     cellproperties = {}
 
-    def __init__(self, container, index, player, font):
+    def __init__(self, container, index, player, size_ratio):
         if self.__class__ == Column:
             raise NotImplementedError("Can't instantiate "
                                       "abstract class %s" % repr(self.__class__))
-
+        
+        self._size_ratio = size_ratio
         self.container = container
         self.player = player
         self.settings_width_name = "gui/col_width_%s" % self.name
         self.cellrenderer = self.renderer()
-        self.extrasize = 0
         self.destroyed = False
-
-        self._setup_font(font)
 
         if index == 2:
             super(Column, self).__init__(self.display)
@@ -100,6 +98,8 @@ class Column(Gtk.TreeViewColumn):
 
         for name, val in self.cellproperties.iteritems():
             self.cellrenderer.set_property(name, val)
+        
+        self.set_attributes(self.cellrenderer, sensitive=3)
 
         self.set_reorderable(True)
         self.set_clickable(True)
@@ -146,11 +146,11 @@ class Column(Gtk.TreeViewColumn):
             pass
 
         # how much has the font deviated from normal?
-        self._font_ratio = font.get_size() / def_font_sz
+        self._ratio = font.get_size() / def_font_sz
 
         try:
             # adjust the display size of the column
-            ratio = self._font_ratio
+            ratio = self._ratio
 
             # small fonts can be problematic..
             # -> TODO: perhaps default widths could be specified
@@ -169,7 +169,7 @@ class Column(Gtk.TreeViewColumn):
                 self.set_resizable(True)
                 self.set_expand(False)
                 width = settings.get_option(self.settings_width_name,
-                                            self.size + self.extrasize)
+                                            self.size)
                 self.set_fixed_width(width)
             else:
                 self.set_resizable(False)
@@ -178,44 +178,34 @@ class Column(Gtk.TreeViewColumn):
                     self.set_fixed_width(1)
                 else:
                     self.set_expand(False)
-                    self.set_fixed_width(self.size + self.extrasize)
+                    self.set_fixed_width(self.size)
 
     def get_icon_height(self):
         '''Returns a default icon height based on the font size'''
         sz = Gtk.icon_size_lookup(Gtk.IconSize.BUTTON)[1]
-        return max(int(sz * self._font_ratio), 1)
+        return max(int(sz * self._ratio), 1)
+    
+    def set_size_ratio(self, ratio):
+        self._ratio = ratio
 
-    def get_icon_size_ratio(self):
+    def get_size_ratio(self):
         '''Returns how much bigger or smaller an icon should be'''
-        return self._font_ratio
+        return self._ratio
 
     def data_func(self, col, cell, model, iter, user_data):
         # warning: this function gets called from the render function, so do as
         #          little work as possible!
         
-        path = model.get_path(iter)
-        track = model.get_value(iter, 0)
+        cache = model.get_value(iter, self.container.COL_CACHE)
         
-        cell.props.text = self.formatter.format(track)
+        text = cache.get(self.name)
+        if text is None:
+            track = model.get_value(iter, self.container.COL_TRACK)
+            text = self.formatter.format(track)
+            cache[self.name] = text
         
-        # TODO: cache these properties somewhere instead of computing them?s
-        playlist = self.container.playlist
-        if playlist is not self.player.queue.current_playlist:
-            cell.props.weight = Pango.Weight.NORMAL
-            cell.props.sensitive = True
-        else:
-            if track == self.player.current and \
-               path[0] == playlist.get_current_position():
-                cell.props.weight = Pango.Weight.HEAVY
-            else:
-                cell.props.weight = Pango.Weight.NORMAL
-            
-            if -1 < playlist.spat_position < path[0] and \
-                    playlist.shuffle_mode == 'disabled':
-                cell.props.sensitive = False
-            else:
-                cell.props.sensitive = True
-
+        cell.props.text = text
+        
     def __repr__(self):
         return '%s(%r, %r, %r)' % (self.__class__.__name__,
                                    self.name, self.display, self.size)
@@ -290,7 +280,7 @@ class RatingColumn(Column):
     def __init__(self, *args):
         Column.__init__(self, *args)
         self.cellrenderer.connect('rating-changed', self.on_rating_changed)
-        self.cellrenderer.size_ratio = self.get_icon_size_ratio()
+        self.cellrenderer.size_ratio = self.get_size_ratio()
         self.saved_model = None
 
     def data_func(self, col, cell, model, iter, user_data):
@@ -302,7 +292,7 @@ class RatingColumn(Column):
         """
             Retrieves the optimal size
         """
-        size = icons.MANAGER.pixbuf_from_rating(0, self.get_icon_size_ratio()).get_width()
+        size = icons.MANAGER.pixbuf_from_rating(0, self.get_size_ratio()).get_width()
         size += 2  # FIXME: Find the source of this
 
         return size
